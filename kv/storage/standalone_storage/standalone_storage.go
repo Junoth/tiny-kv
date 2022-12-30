@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap-incubator/tinykv/kv/util/engine_util"
 	"github.com/pingcap-incubator/tinykv/log"
 	"github.com/pingcap-incubator/tinykv/proto/pkg/kvrpcpb"
+	"path/filepath"
 )
 
 // StandAloneStorage is an implementation of `Storage` for a single-node TinyKV instance. It does not
@@ -28,10 +29,12 @@ func (s *StandAloneStorage) Start() error {
 	if s == nil {
 		return errors.New("standalone storage is nil")
 	}
+	kvPath := filepath.Join(s.conf.DBPath, "kv")
+	raftPath := filepath.Join(s.conf.DBPath, "raft")
+	kvDB := engine_util.CreateDB(kvPath, false)
+	raftDB := engine_util.CreateDB(raftPath, true)
+	s.engine = engine_util.NewEngines(kvDB, raftDB, kvPath, raftPath)
 	log.Debug("Start the standalone storage")
-	kvDB := engine_util.CreateDB(s.conf.DBPath, false)
-	raftDB := engine_util.CreateDB(s.conf.DBPath, true)
-	s.engine = engine_util.NewEngines(kvDB, raftDB, s.conf.DBPath, s.conf.DBPath)
 	return nil
 }
 
@@ -39,8 +42,8 @@ func (s *StandAloneStorage) Stop() error {
 	if s == nil {
 		return errors.New("standalone storage is nil")
 	}
-	log.Debug("Close the standalone storage")
 	err := s.engine.Destroy()
+	log.Debug("Close the standalone storage")
 	return err
 }
 
@@ -90,8 +93,8 @@ type StandAloneStorageReader struct {
 }
 
 func (r *StandAloneStorageReader) GetCF(cf string, key []byte) ([]byte, error) {
-	value, err := engine_util.GetCFFromTxn(r.txn, cf, key)
-	return value, err
+	value, _ := engine_util.GetCFFromTxn(r.txn, cf, key)
+	return value, nil
 }
 
 func (r *StandAloneStorageReader) IterCF(cf string) engine_util.DBIterator {
